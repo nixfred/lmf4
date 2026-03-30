@@ -330,9 +330,7 @@ function addDecision(text: string, project?: string): void {
     `INSERT INTO decisions (project, decision, reasoning) VALUES (?, ?, ?)`
   ).run(project || null, decision, reasoning);
 
-  // Sync to FTS
-  db.prepare(`INSERT INTO decisions_fts (rowid, decision, reasoning) VALUES (?, ?, ?)`)
-    .run(result.lastInsertRowid, decision, reasoning || '');
+  // NOTE: trigger handles FTS sync automatically
 
   console.log(`Decision added (id: ${result.lastInsertRowid})`);
   db.close();
@@ -348,8 +346,7 @@ function addLearning(text: string, project?: string): void {
     `INSERT INTO learnings (project, problem, solution) VALUES (?, ?, ?)`
   ).run(project || null, problem, solution);
 
-  db.prepare(`INSERT INTO learnings_fts (rowid, problem, solution) VALUES (?, ?, ?)`)
-    .run(result.lastInsertRowid, problem, solution || '');
+  // NOTE: trigger handles FTS sync automatically
 
   console.log(`Learning added (id: ${result.lastInsertRowid})`);
   db.close();
@@ -485,9 +482,7 @@ function importLegacy(): void {
       `INSERT INTO loa_entries (created_at, title, fabric_extract, project) VALUES (?, ?, ?, ?)`
     ).run(date, title, body, project);
 
-    // FTS
-    db.prepare(`INSERT INTO loa_fts (rowid, title, fabric_extract) VALUES (?, ?, ?)`)
-      .run(result.lastInsertRowid, title, body);
+    // NOTE: trigger handles FTS sync automatically
 
     // Also extract decisions from the body
     const decisionsMatch = body.match(/##\s*DECISIONS\s*MADE\s*([\s\S]*?)(?=\n##\s|$)/);
@@ -506,8 +501,7 @@ function importLegacy(): void {
           `INSERT INTO decisions (created_at, project, decision, reasoning) VALUES (?, ?, ?, ?)`
         ).run(date, project, decision, reasoning);
 
-        db.prepare(`INSERT INTO decisions_fts (rowid, decision, reasoning) VALUES (?, ?, ?)`)
-          .run(r.lastInsertRowid, decision, reasoning || '');
+        // NOTE: trigger handles FTS sync
       }
     }
 
@@ -529,8 +523,7 @@ function importLegacy(): void {
             `INSERT INTO errors (created_at, error, fix) VALUES (?, ?, ?)`
           ).run(date, error, fix);
 
-          db.prepare(`INSERT INTO errors_fts (rowid, error, fix) VALUES (?, ?, ?)`)
-            .run(r.lastInsertRowid, error, fix);
+          // NOTE: trigger handles FTS sync
         }
       }
     }
@@ -668,8 +661,7 @@ function dump(title: string): void {
     `INSERT INTO loa_entries (title, fabric_extract, session_id, project) VALUES (?, ?, ?, ?)`
   ).run(title, fabricExtract, sessionId, project);
 
-  db.prepare(`INSERT INTO loa_fts (rowid, title, fabric_extract) VALUES (?, ?, ?)`)
-    .run(result.lastInsertRowid, title, fabricExtract);
+  // NOTE: trigger handles FTS sync automatically
 
   // Also extract decisions and errors into their tables
   const decisionsMatch = fabricExtract.match(/(?:##\s*DECISIONS\s*MADE|DECISIONS:)\s*([\s\S]*?)(?=\n##\s|$)/);
@@ -686,8 +678,7 @@ function dump(title: string): void {
       const r = db.prepare(
         `INSERT INTO decisions (session_id, project, decision, reasoning) VALUES (?, ?, ?, ?)`
       ).run(sessionId, project, decision, reasoning);
-      db.prepare(`INSERT INTO decisions_fts (rowid, decision, reasoning) VALUES (?, ?, ?)`)
-        .run(r.lastInsertRowid, decision, reasoning || '');
+      // NOTE: trigger handles FTS sync
     }
   }
 
@@ -708,8 +699,8 @@ function dump(title: string): void {
           db.prepare('UPDATE errors SET frequency = frequency + 1, last_seen = CURRENT_TIMESTAMP, fix = ? WHERE id = ?')
             .run(fix, existing.id);
         } else {
-          const r = db.prepare('INSERT INTO errors (error, fix) VALUES (?, ?)').run(error, fix);
-          db.prepare('INSERT INTO errors_fts (rowid, error, fix) VALUES (?, ?, ?)').run(r.lastInsertRowid, error, fix);
+          db.prepare('INSERT INTO errors (error, fix) VALUES (?, ?)').run(error, fix);
+          // NOTE: trigger handles FTS sync
         }
       }
     }

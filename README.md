@@ -57,7 +57,7 @@ git clone https://github.com/nixfred/lmf4.git
 ```
 
 > [!TIP]
-> **That's it.** Your Claude Code reads this file, asks you a few questions, installs everything, runs a personality workshop, writes your AI's first memories, and hands off. **Prerequisites:** Ubuntu + Claude Code.
+> **That's it.** Your Claude Code reads this file, asks you a few questions, installs everything, runs a personality workshop, writes your AI's first memories, and hands off. **Prerequisites:** Ubuntu + Claude Code + sudo access + ~500MB free disk space.
 
 <br>
 
@@ -80,9 +80,11 @@ git clone https://github.com/nixfred/lmf4.git
 ```
 $ mem search "kubernetes deployment"
 
-  [decision:42]  Chose Helm charts — reproducibility across environments
-  [error:18]     CrashLoopBackOff — fix: memory limits 256Mi → 512Mi
-  [learning:31]  Rolling updates need readiness probes
+3 results for "kubernetes deployment" (keyword only):
+
+  [dec:42]   ( 0.00) Chose Helm charts for K8s — reproducibility across environments
+  [err:18]   ( 0.00) CrashLoopBackOff on staging — increased memory limits 256Mi to 512Mi
+  [lrn:31]   ( 0.00) Rolling updates need readiness probes or traffic hits unready pods
 ```
 
 > [!NOTE]
@@ -314,8 +316,8 @@ echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.bashrc
 Add `~/bin` to PATH (needed for mem CLI and helper scripts) and Claude Code convenience aliases:
 ```bash
 grep -q 'HOME/bin' ~/.bashrc || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
-echo "alias ccc='claude --dangerously-skip-permissions'" >> ~/.bashrc
-echo "alias cccc='claude --dangerously-skip-permissions -c'" >> ~/.bashrc
+grep -q 'alias ccc=' ~/.bashrc || echo "alias ccc='claude --dangerously-skip-permissions'" >> ~/.bashrc
+grep -q 'alias cccc=' ~/.bashrc || echo "alias cccc='claude --dangerously-skip-permissions -c'" >> ~/.bashrc
 export PATH="$HOME/bin:$PATH"
 ```
 
@@ -342,7 +344,10 @@ Fabric is a prompt pattern framework. It requires Go 1.25+ which is newer than w
 
 ```bash
 # Install Go (latest stable — Ubuntu's golang-go package is too old for Fabric)
-curl -fsSL https://go.dev/dl/go1.26.1.linux-amd64.tar.gz -o /tmp/go.tar.gz
+# Detect architecture (supports x86_64 and ARM64)
+GOARCH=$(dpkg --print-architecture)
+if [ "$GOARCH" = "amd64" ]; then GOARCH="amd64"; elif [ "$GOARCH" = "arm64" ]; then GOARCH="arm64"; fi
+curl -fsSL "https://go.dev/dl/go1.26.1.linux-${GOARCH}.tar.gz" -o /tmp/go.tar.gz
 sudo rm -rf /usr/local/go
 sudo tar -C /usr/local -xzf /tmp/go.tar.gz
 rm /tmp/go.tar.gz
