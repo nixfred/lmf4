@@ -343,7 +343,7 @@ Fabric is a prompt pattern framework. It requires Go 1.25+ which is newer than w
 
 ```bash
 # Install Go (latest stable — Ubuntu's golang-go package is too old for Fabric)
-curl -fsSL https://go.dev/dl/go1.25.1.linux-amd64.tar.gz -o /tmp/go.tar.gz
+curl -fsSL https://go.dev/dl/go1.26.1.linux-amd64.tar.gz -o /tmp/go.tar.gz
 sudo rm -rf /usr/local/go
 sudo tar -C /usr/local -xzf /tmp/go.tar.gz
 rm /tmp/go.tar.gz
@@ -400,15 +400,19 @@ fabric --updatepatterns
 
 ### Step 1c: Install PAI
 
-PAI (Personal AI Infrastructure) provides the identity system, algorithm framework, and hook infrastructure that LMF4 builds on. It's an open-source project. Clone it and run the installer.
+PAI (Personal AI Infrastructure) provides the identity system, algorithm framework, and hook infrastructure that LMF4 builds on. It's an open-source project. Clone it, copy the release, and run the installer.
 
 ```bash
 mkdir -p ~/Projects
 cd ~/Projects
 git clone https://github.com/danielmiessler/Personal_AI_Infrastructure.git
-cd Personal_AI_Infrastructure
+cd Personal_AI_Infrastructure/Releases/v4.0.3
+cp -r .claude ~/
+cd ~/.claude
 bash install.sh
 ```
+
+**IMPORTANT:** The install.sh is NOT at the repo root. It's inside `Releases/v4.0.3/.claude/`. The `cp -r .claude ~/` copies the release files to your home directory, then you run the installer from `~/.claude/`.
 
 The PAI installer is interactive — it will ask you questions. Since you already collected all the needed info in Step 0, provide the answers when prompted:
 
@@ -423,6 +427,8 @@ The PAI installer is interactive — it will ask you questions. Since you alread
 The installer handles generating settings.json and setting up the directory structure. After it completes, `~/.claude/PAI/` will exist with the full PAI system.
 
 **Do not skip this step. PAI is required.** If the `git clone` fails, check network connectivity. If `bash install.sh` fails, read the error and fix it. If the installer asks a question you didn't collect in Step 0, ask the user now.
+
+**Note about the PAI version:** The install path references `v4.0.3`. Check the [PAI releases page](https://github.com/danielmiessler/Personal_AI_Infrastructure/tree/main/Releases) for the latest version and use that instead if newer.
 
 **Verify:** `ls ~/.claude/PAI/` shows the PAI directory structure AND `~/.claude/settings.json` exists. Both must be true before continuing.
 
