@@ -156,7 +156,7 @@ insertLearning(
 
 db.close();
 console.log("Genesis block written: " +
-  "1 origin + 7 principles + 1 human + 1 personality + 3 learnings = 13 entries");
+  "1 origin + 8 principles + 1 human + 1 personality + 3 learnings = 14 entries");
 '
 ```
 
