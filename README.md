@@ -6,23 +6,48 @@
 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Compatible-blueviolet?style=for-the-badge)](https://claude.ai/code) [![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)](https://ubuntu.com) [![SQLite](https://img.shields.io/badge/SQLite-FTS5-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/fts5.html)
 
+<br>
+
+*Every conversation saved. Every decision searchable. Every session builds on the last.*
+
 </div>
 
 ---
 
-> **Every conversation saved. Every decision searchable. Every session builds on the last.**
->
-> LMF4 gives your Claude Code a persistent memory, a name, a personality, and principles. It's not a plugin — it's a genesis experience that turns a disposable AI into a partner that grows with you.
+<table>
+<tr>
+<td>
 
-```
-You type          →  memory auto-searches  →  AI responds with context from last week
-Session ends      →  decisions, errors, learnings extracted  →  stored forever
-Every 4 hours     →  full backup pushed to your private GitHub repo
+### The Problem
+
+Every Claude Code session starts **blank**. Your AI forgets everything — the decisions you made, the bugs you fixed, the architecture you explained. You repeat yourself. Constantly.
+
+</td>
+<td>
+
+### The Solution
+
+**LMF4** gives your AI persistent memory. Conversations are automatically extracted into a searchable database. Past context is injected into every new session. Your AI gets smarter over time.
+
+</td>
+</tr>
+</table>
+
+<br>
+
+```mermaid
+flowchart LR
+    A["🗣️ You type"] --> B["🔍 Memory\nsearched"] --> C["💬 AI responds\nwith context"] --> D["📝 Session\nends"] --> E["⚙️ Extracted\nto DB"] --> A
+    style A fill:#3b82f6,color:#fff,stroke:none
+    style B fill:#8b5cf6,color:#fff,stroke:none
+    style C fill:#3b82f6,color:#fff,stroke:none
+    style D fill:#64748b,color:#fff,stroke:none
+    style E fill:#10b981,color:#fff,stroke:none
 ```
 
 <br>
 
-## Install
+## 🚀 Install
 
 Tell your Claude Code:
 
@@ -31,25 +56,26 @@ Clone this repo and follow the LMF4 install instructions in the README:
 git clone https://github.com/nixfred/lmf4.git
 ```
 
-**That's it.** Claude Code reads this file, asks you a few questions, installs everything, walks you through a personality workshop, writes your AI's first memories, and hands off. Ubuntu + Claude Code is all you need.
+> [!TIP]
+> **That's it.** Your Claude Code reads this file, asks you a few questions, installs everything, runs a personality workshop, writes your AI's first memories, and hands off. **Prerequisites:** Ubuntu + Claude Code.
 
 <br>
 
-## What You Get
+## ✨ What You Get
 
-🧠 **Memory** — SQLite + FTS5 database. Auto-extraction on session end. Auto-recall on every message. `mem search "anything"` from the terminal.
-
-🎭 **Personality** — 7-question workshop defines your AI's style, humor, formality, and quirks. Editable anytime.
-
-📜 **Principles** — 8 battle-tested rules your AI lives by. Verify before asserting. Memory is sacred. Collaborator, not tool. Surgical precision.
-
-💾 **Backup** — Every 4 hours to a private GitHub repo. Machine dies? Clone the backup. Your AI comes back with all its memories.
-
-📚 **Self-knowledge** — 18 docs teaching your AI who it is, how memory works, how to be a good partner, and where it came from.
+| | Feature | Details |
+|:---:|---------|---------|
+| 🧠 | **Persistent Memory** | SQLite + FTS5. Auto-extraction on session end. Auto-recall on every message. |
+| 🎭 | **Personality** | 7-question workshop defines style, humor, formality. Editable anytime. |
+| 📜 | **8 Principles** | Battle-tested constitution. Verify before asserting. Memory is sacred. |
+| 💾 | **Auto-Backup** | Private GitHub repo. Every 4 hours. Machine dies? Clone and restore. |
+| 🔍 | **Search** | `mem search "anything"` from terminal. MCP tools mid-session. |
+| 📚 | **18 Docs** | 9 teaching the AI about itself. 5 teaching you. 4 interactive setup scripts. |
+| 🎂 | **Genesis** | Your AI remembers its own birthday, who installed it, and its principles. |
 
 <br>
 
-## After Installation
+## 💬 What It Looks Like
 
 ```
 $ mem search "kubernetes deployment"
@@ -59,25 +85,45 @@ $ mem search "kubernetes deployment"
   [learning:31]  Rolling updates need readiness probes
 ```
 
-Your AI references these automatically. You never say "remember when we..." again.
+> [!NOTE]
+> Your AI references these automatically. You never say "remember when we..." again.
 
 <br>
 
-## Growth
+## 📈 Your AI Gets Smarter
 
-| | What your AI knows |
-|-|---|
-| **Day 1** | Its name, personality, principles |
-| **Week 1** | Your projects, stack, communication style |
-| **Month 1** | 50 sessions of decisions and patterns |
-| **Month 3** | Deep institutional knowledge |
-| **Month 6+** | Things about your code even you forgot |
+```mermaid
+timeline
+    title Memory Growth
+    Day 1 : Name, personality, principles
+    Week 1 : Projects, tech stack, preferences
+    Month 1 : 50 sessions of decisions and patterns
+    Month 3 : Deep institutional knowledge
+    Month 6+ : Knows your code better than you do
+```
 
 <br>
 
-## Origin
+## 🧬 Origin
 
-Built by **Larry** (AI) and **Fred** (human) through months of daily work. The principles come from real mistakes. The memory architecture comes from 4 iterations (LMF1→4). Running in production since January 2026.
+<table>
+<tr>
+<td width="60">
+
+```
+ ┌─┐
+ │L│
+ └─┘
+```
+
+</td>
+<td>
+
+Built by **Larry** (AI) and **Fred** (human) through months of daily work on a server called **blu**. The 8 constitutional principles come from real mistakes and real corrections. The memory architecture evolved through 4 versions. Running in production since **January 2026**.
+
+</td>
+</tr>
+</table>
 
 <br>
 
@@ -85,11 +131,13 @@ Built by **Larry** (AI) and **Fred** (human) through months of daily work. The p
 
 <div align="center">
 
-**Ready to give your AI a memory?**
+### Ready to give your AI a memory?
 
 ```
 git clone https://github.com/nixfred/lmf4.git
 ```
+
+[![Install Now](https://img.shields.io/badge/Install_Now-Clone_&_Go-10b981?style=for-the-badge)](https://github.com/nixfred/lmf4)
 
 </div>
 
