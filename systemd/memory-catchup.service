@@ -1,0 +1,9 @@
+[Unit]
+Description=LMF4 memory extraction catchup (unprocessed sessions)
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/memory-catchup
+Environment=HOME=%h
+WorkingDirectory=%h
+TimeoutStartSec=600

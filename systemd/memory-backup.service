@@ -1,0 +1,11 @@
+[Unit]
+Description=LMF4 full instance backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/memory-backup
+Environment=HOME=%h
+WorkingDirectory=%h
+TimeoutStartSec=600

@@ -1,0 +1,421 @@
+#!/bin/bash
+#######################################################################
+# LMF4 — Larry Memory Framework v4
+#
+# Installs the persistent memory system for Claude Code.
+#
+# Prerequisites:
+#   - Ubuntu with Claude Code installed and working
+#
+# What LMF4 adds:
+#   - memory.db        SQLite + FTS5 database for persistent memory
+#   - 6 hooks          Extraction, recall, compaction, failure tracking
+#   - MCP server       memory_search + memory_recall tools for in-session use
+#   - mem CLI           Command-line memory search (mem search "query")
+#   - systemd timers   Catchup extraction every 4h, backup every 4h
+#   - backup repo      Git-tracked full instance backup
+#
+# Idempotent: safe to run multiple times.
+#
+# Usage:
+#   cd LMF4 && ./install
+#######################################################################
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CLAUDE_DIR="$HOME/.claude"
+HOOKS_DIR="$CLAUDE_DIR/hooks"
+MEMORY_DIR="$CLAUDE_DIR/MEMORY"
+BIN_DIR="$HOME/bin"
+
+log() { echo "[LMF4] $1"; }
+ok()  { echo "[LMF4] ✓ $1"; }
+err() { echo "[LMF4] ✗ $1" >&2; }
+
+#######################################################################
+# Preflight checks
+#######################################################################
+if [ ! -d "$CLAUDE_DIR" ]; then
+    err "~/.claude/ not found. Install Claude Code first."
+    exit 1
+fi
+
+ok "Preflight: Claude Code confirmed"
+
+#######################################################################
+# 0. Install bun if not present
+#######################################################################
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$HOME/bin:$HOME/.local/bin:$PATH"
+
+if command -v bun &>/dev/null; then
+    ok "bun already installed: $(bun --version)"
+else
+    log "Installing bun..."
+    # bun installer requires unzip
+    if ! command -v unzip &>/dev/null; then
+        log "Installing unzip (required by bun)..."
+        sudo apt-get install -y -qq unzip 2>/dev/null || { err "Cannot install unzip. Install it manually: sudo apt-get install unzip"; exit 1; }
+    fi
+    curl -fsSL https://bun.sh/install | bash
+    if ! grep -q 'BUN_INSTALL' ~/.bashrc 2>/dev/null; then
+        echo 'export BUN_INSTALL="$HOME/.bun"' >> ~/.bashrc
+        echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.bashrc
+    fi
+    ok "bun installed: $(bun --version)"
+fi
+
+mkdir -p "$HOOKS_DIR"
+
+#######################################################################
+# 1. Create MEMORY directory structure
+#######################################################################
+log "Creating MEMORY directory structure..."
+mkdir -p "$MEMORY_DIR"/{WORK,LEARNING/{SYSTEM,ALGORITHM,FAILURES,SYNTHESIS,REFLECTIONS,SIGNALS},RESEARCH,SECURITY,STATE/{algorithms,kitty-sessions,tab-titles,progress,integrity},PAISYSTEMUPDATES,AUTO}
+mkdir -p "$BIN_DIR"
+ok "Directory structure"
+
+#######################################################################
+# 2. Initialize memory.db
+#######################################################################
+if [ -f "$CLAUDE_DIR/memory.db" ]; then
+    ok "memory.db already exists ($(du -sh "$CLAUDE_DIR/memory.db" | cut -f1))"
+else
+    log "Creating memory.db with schema..."
+    bun -e "
+const { Database } = require('bun:sqlite');
+const db = new Database('$CLAUDE_DIR/memory.db');
+db.exec(\`
+  CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT UNIQUE NOT NULL,
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    ended_at DATETIME, summary TEXT, project TEXT, cwd TEXT
+  );
+  CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL, timestamp DATETIME NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+    content TEXT NOT NULL, project TEXT,
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id)
+  );
+  CREATE TABLE IF NOT EXISTS loa_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    title TEXT NOT NULL, fabric_extract TEXT NOT NULL,
+    session_id TEXT, project TEXT, tags TEXT
+  );
+  CREATE TABLE IF NOT EXISTS decisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    session_id TEXT, project TEXT, decision TEXT NOT NULL, reasoning TEXT,
+    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'superseded', 'reverted'))
+  );
+  CREATE TABLE IF NOT EXISTS errors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    error TEXT NOT NULL, cause TEXT, fix TEXT,
+    frequency INTEGER DEFAULT 1, last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS learnings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    session_id TEXT, project TEXT, problem TEXT NOT NULL, solution TEXT, tags TEXT
+  );
+  CREATE TABLE IF NOT EXISTS embeddings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_table TEXT NOT NULL, source_id INTEGER NOT NULL,
+    model TEXT NOT NULL DEFAULT 'nomic-embed-text',
+    dimensions INTEGER NOT NULL DEFAULT 768,
+    embedding BLOB NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(source_table, source_id)
+  );
+  CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(content, content_rowid='id', tokenize='porter');
+  CREATE VIRTUAL TABLE IF NOT EXISTS loa_fts USING fts5(title, fabric_extract, content_rowid='id', tokenize='porter');
+  CREATE VIRTUAL TABLE IF NOT EXISTS decisions_fts USING fts5(decision, reasoning, content_rowid='id', tokenize='porter');
+  CREATE VIRTUAL TABLE IF NOT EXISTS errors_fts USING fts5(error, fix, content_rowid='id', tokenize='porter');
+  CREATE VIRTUAL TABLE IF NOT EXISTS learnings_fts USING fts5(problem, solution, content_rowid='id', tokenize='porter');
+\`);
+const triggers = [
+  ['messages', 'content'],
+  ['loa_entries:loa', 'title, fabric_extract'],
+  ['decisions', 'decision, reasoning'],
+  ['errors', 'error, fix'],
+  ['learnings', 'problem, solution'],
+];
+for (const [spec, cols] of triggers) {
+  const [table, ftsName] = spec.includes(':') ? spec.split(':') : [spec, spec];
+  const fts = ftsName + '_fts';
+  const nc = cols.split(',').map(c => 'NEW.' + c.trim()).join(', ');
+  const oc = cols.split(',').map(c => 'OLD.' + c.trim()).join(', ');
+  try { db.exec(\`
+    CREATE TRIGGER \${fts}_insert AFTER INSERT ON \${table} BEGIN INSERT INTO \${fts}(rowid, \${cols}) VALUES (NEW.id, \${nc}); END;
+    CREATE TRIGGER \${fts}_delete AFTER DELETE ON \${table} BEGIN INSERT INTO \${fts}(\${fts}, rowid, \${cols}) VALUES ('delete', OLD.id, \${oc}); END;
+  \`); } catch(e) {}
+}
+db.close();
+console.log('Done');
+"
+    ok "memory.db initialized (8 tables, 5 FTS5, 10 triggers)"
+fi
+
+#######################################################################
+# 3. Install hooks
+#######################################################################
+log "Installing memory hooks..."
+HOOKS_INSTALLED=0
+for hook in FabricExtract.hook.ts AssociativeRecall.hook.ts PreCompact.hook.sh PostCompact.hook.ts StopFailure.hook.ts; do
+    src="$SCRIPT_DIR/hooks/$hook"
+    dst="$HOOKS_DIR/$hook"
+    if [ -f "$src" ]; then
+        if [ -f "$dst" ] && cmp -s "$src" "$dst"; then
+            : # identical, skip
+        else
+            cp "$src" "$dst"
+            chmod +x "$dst"
+            HOOKS_INSTALLED=$((HOOKS_INSTALLED + 1))
+        fi
+    else
+        err "Missing: hooks/$hook"
+    fi
+done
+ok "Hooks ($HOOKS_INSTALLED new/updated, 6 total)"
+
+#######################################################################
+# 4. Install MCP server
+#######################################################################
+log "Installing MCP memory server..."
+src="$SCRIPT_DIR/mcp/mem-mcp-server.ts"
+dst="$HOOKS_DIR/mem-mcp-server.ts"
+if [ -f "$src" ]; then
+    cp "$src" "$dst"
+    chmod +x "$dst"
+    ok "MCP server (memory_search, memory_recall)"
+else
+    err "Missing: mcp/mem-mcp-server.ts"
+fi
+
+#######################################################################
+# 5. Install extract prompt
+#######################################################################
+if [ -f "$SCRIPT_DIR/prompts/extract_prompt.md" ]; then
+    cp "$SCRIPT_DIR/prompts/extract_prompt.md" "$MEMORY_DIR/extract_prompt.md"
+    ok "Extract prompt"
+fi
+
+#######################################################################
+# 6. Build and install mem CLI
+#######################################################################
+if command -v mem &>/dev/null; then
+    ok "mem CLI already installed"
+else
+    MEM_SRC="$SCRIPT_DIR/mem-cli"
+    if [ -d "$MEM_SRC/src" ]; then
+        log "Building mem CLI..."
+        MEM_DEST="$CLAUDE_DIR/memory-cli"
+        mkdir -p "$MEM_DEST/src" "$MEM_DEST/dist"
+        cp -r "$MEM_SRC/src/"* "$MEM_DEST/src/"
+        cp "$MEM_SRC/package.json" "$MEM_DEST/"
+        cd "$MEM_DEST"
+        bun install 2>/dev/null || true
+        bun build src/index.ts --outdir dist --target node 2>/dev/null
+        if [ -f dist/index.js ]; then
+            chmod +x dist/index.js
+            ln -sf "$MEM_DEST/dist/index.js" "$BIN_DIR/mem"
+            ok "mem CLI → ~/bin/mem"
+        else
+            err "mem CLI build failed"
+        fi
+        cd ~
+    else
+        err "mem CLI source not found in $MEM_SRC"
+    fi
+fi
+
+#######################################################################
+# 7. Merge settings.json (hooks + MCP)
+#######################################################################
+log "Merging LMF4 into settings.json..."
+bun -e "
+const fs = require('fs');
+const path = '$CLAUDE_DIR/settings.json';
+let s = {};
+try { s = JSON.parse(fs.readFileSync(path, 'utf8')); } catch {}
+if (!s.hooks) s.hooks = {};
+
+const HOME = process.env.HOME;
+const hookDefs = {
+  'PreCompact': { type: 'command', command: HOME + '/.claude/hooks/PreCompact.hook.sh' },
+  'PostCompact': { type: 'command', command: 'bun run ' + HOME + '/.claude/hooks/PostCompact.hook.ts' },
+  'StopFailure': { type: 'command', command: 'bun run ' + HOME + '/.claude/hooks/StopFailure.hook.ts' },
+  'Stop': { type: 'command', command: 'bun run ' + HOME + '/.claude/hooks/FabricExtract.hook.ts' },
+  'UserPromptSubmit': { type: 'command', command: 'bun run ' + HOME + '/.claude/hooks/AssociativeRecall.hook.ts' },
+};
+
+// Claude Code hook format: each event is an array of matcher objects
+// Each matcher has optional "matcher" string and required "hooks" array
+for (const [event, hookDef] of Object.entries(hookDefs)) {
+  if (!s.hooks[event]) {
+    s.hooks[event] = [{ hooks: [hookDef] }];
+  } else {
+    // Check if hook already exists in any matcher
+    const file = hookDef.command.split('/').pop();
+    const exists = s.hooks[event].some(m =>
+      m.hooks && m.hooks.some(h => h.command && h.command.includes(file))
+    );
+    if (!exists) {
+      // Append to first matcher's hooks array, or create new matcher
+      if (s.hooks[event][0] && s.hooks[event][0].hooks) {
+        s.hooks[event][0].hooks.push(hookDef);
+      } else {
+        s.hooks[event].push({ hooks: [hookDef] });
+      }
+    }
+  }
+}
+
+if (!s.mcpServers) s.mcpServers = {};
+if (!s.mcpServers['pai-memory']) {
+  s.mcpServers['pai-memory'] = {
+    type: 'stdio', command: 'bun',
+    args: ['run', process.env.HOME + '/.claude/hooks/mem-mcp-server.ts']
+  };
+}
+
+if (!s.env) s.env = {};
+s.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS = s.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS || '128000';
+s.autoMemoryDirectory = s.autoMemoryDirectory || process.env.HOME + '/.claude/MEMORY/AUTO';
+
+fs.writeFileSync(path, JSON.stringify(s, null, 2) + '\n');
+console.log('OK');
+"
+ok "settings.json (hooks + MCP + env)"
+
+#######################################################################
+# 8. Helper scripts
+#######################################################################
+log "Creating helper scripts..."
+
+cat > "$BIN_DIR/memory-catchup" << 'EOF'
+#!/bin/bash
+exec bun run ~/.claude/hooks/FabricExtract.hook.ts --batch >> ~/.claude/MEMORY/EXTRACT_LOG.txt 2>&1
+EOF
+chmod +x "$BIN_DIR/memory-catchup"
+
+cat > "$BIN_DIR/memory-backup" << 'BEOF'
+#!/bin/bash
+set -e
+CLAUDE_DIR="$HOME/.claude"
+BACKUP_DIR="$CLAUDE_DIR/conversations-backup"
+LOG="$CLAUDE_DIR/MEMORY/EXTRACT_LOG.txt"
+log() { echo "[$(date -Iseconds)] BACKUP: $1" >> "$LOG" 2>/dev/null; }
+
+if [ ! -d "$BACKUP_DIR/.git" ]; then
+    echo "No backup repo. Run: mkdir -p $BACKUP_DIR && cd $BACKUP_DIR && git init && git remote add origin <url>"
+    exit 1
+fi
+cd "$BACKUP_DIR"
+for f in settings.json CLAUDE.md keybindings.json memory.db; do
+    cp "$CLAUDE_DIR/$f" "$BACKUP_DIR/" 2>/dev/null || true
+done
+rsync -a --delete "$CLAUDE_DIR/hooks/" "$BACKUP_DIR/hooks/" 2>/dev/null || true
+rsync -a --delete --exclude='.extraction_tracker.json' "$CLAUDE_DIR/MEMORY/" "$BACKUP_DIR/MEMORY/" 2>/dev/null || true
+rsync -a --delete --exclude='tool-results/' --exclude='subagents/' "$CLAUDE_DIR/projects/" "$BACKUP_DIR/projects/" 2>/dev/null || true
+git add -A 2>/dev/null
+if ! git diff --cached --quiet 2>/dev/null; then
+    TS=$(date '+%Y-%m-%d %H:%M')
+    SC=$(find "$BACKUP_DIR/projects" -name "*.jsonl" 2>/dev/null | wc -l)
+    DS=$(du -sh "$BACKUP_DIR/memory.db" 2>/dev/null | cut -f1)
+    git commit -m "backup: $TS | ${SC} sessions | db: ${DS}" --no-gpg-sign 2>/dev/null
+    log "Committed: ${SC} sessions, db: ${DS}"
+    git push 2>/dev/null && log "Pushed" || log "Push failed"
+else
+    log "No changes"
+fi
+BEOF
+chmod +x "$BIN_DIR/memory-backup"
+
+ok "Helper scripts (memory-catchup, memory-backup)"
+
+#######################################################################
+# 9. Systemd user timers
+#######################################################################
+log "Setting up systemd timers..."
+SYSTEMD_DIR="$HOME/.config/systemd/user"
+mkdir -p "$SYSTEMD_DIR"
+
+for unit in memory-catchup.service memory-catchup.timer memory-backup.service memory-backup.timer; do
+    if [ -f "$SCRIPT_DIR/systemd/$unit" ]; then
+        cp "$SCRIPT_DIR/systemd/$unit" "$SYSTEMD_DIR/"
+    fi
+done
+
+loginctl enable-linger "$(whoami)" 2>/dev/null || true
+systemctl --user daemon-reload 2>/dev/null || true
+systemctl --user enable --now memory-catchup.timer 2>/dev/null || log "Note: timers need a login session"
+systemctl --user enable --now memory-backup.timer 2>/dev/null || log "Note: timers need a login session"
+
+ok "Systemd timers (4h catchup + 4h backup)"
+
+#######################################################################
+# 10. Git backup repo
+#######################################################################
+BACKUP_DIR="$CLAUDE_DIR/conversations-backup"
+if [ -d "$BACKUP_DIR/.git" ]; then
+    ok "Backup repo already initialized"
+else
+    log "Initializing backup repo..."
+    mkdir -p "$BACKUP_DIR"
+    cd "$BACKUP_DIR"
+    git init
+    echo "*.jsonl filter=lfs diff=lfs merge=lfs -text" > .gitattributes
+    echo "node_modules/" > .gitignore
+    git add -A && git commit -m "init: LMF4 memory backup" --no-gpg-sign 2>/dev/null || true
+    cd ~
+    ok "Backup repo (add remote: cd $BACKUP_DIR && git remote add origin <url>)"
+fi
+
+#######################################################################
+# 11. Memory flat files
+#######################################################################
+touch "$MEMORY_DIR/EXTRACT_LOG.txt"
+[ -f "$MEMORY_DIR/HOT_RECALL.md" ] || echo "# Hot Recall (Last 10 Sessions)" > "$MEMORY_DIR/HOT_RECALL.md"
+[ -f "$MEMORY_DIR/DISTILLED.md" ] || echo "# Distilled Memory" > "$MEMORY_DIR/DISTILLED.md"
+[ -f "$MEMORY_DIR/README.md" ] || echo "# LMF4 — Memory System" > "$MEMORY_DIR/README.md"
+ok "Memory flat files"
+
+#######################################################################
+# Summary
+#######################################################################
+echo ""
+echo "═══════════════════════════════════════════════════════════"
+echo "  LMF4 — Installed"
+echo "═══════════════════════════════════════════════════════════"
+echo ""
+echo "  Components:"
+echo "    memory.db       $(du -sh "$CLAUDE_DIR/memory.db" 2>/dev/null | cut -f1 || echo 'new') SQLite + FTS5"
+echo "    5 hooks         FabricExtract, AssociativeRecall, PreCompact,"
+echo "                    PostCompact, StopFailure"
+echo "    MCP server      memory_search + memory_recall"
+if command -v mem &>/dev/null; then
+echo "    mem CLI         $(which mem)"
+fi
+echo "    systemd         memory-catchup (4h) + memory-backup (4h)"
+echo "    backup repo     ~/.claude/conversations-backup/"
+echo ""
+echo "  How it works:"
+echo "    Session ends  → FabricExtract parses transcript → writes to memory.db"
+echo "    You type      → AssociativeRecall searches memory → injects context"
+echo "    Mid-session   → memory_search MCP tool for deeper queries"
+echo "    Compaction    → PreCompact saves, PostCompact verifies"
+echo "    Every 4h      → Catchup extracts missed sessions"
+echo "    Every 4h      → Backup commits + pushes to git"
+echo ""
+echo "  Add to your CLAUDE.md:"
+echo "    cat $(dirname "$0")/templates/CLAUDE.md.memory"
+echo ""
+echo "  Test it:"
+echo "    mem search \"test\"              # CLI search"
+echo "    echo '{...}' | bun run ~/.claude/hooks/mem-mcp-server.ts  # MCP"
+echo ""
