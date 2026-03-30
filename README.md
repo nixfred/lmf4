@@ -694,6 +694,37 @@ If the user provided an ElevenLabs key in Step 0, also add it to the env:
 - `autoMemoryDirectory` points to the correct path
 - `statusline` key still exists (from PAI install — do not remove it)
 
+### Step 8b: Create statusline
+
+The statusline shows the AI's identity in the Claude Code status bar. Create the script and wire it into settings.json.
+
+First, create the statusline script from the template. **You must substitute the real values** — replace `AI_DISPLAY_NAME` with the uppercase AI name (e.g., "BOB") and `AI_CATCHPHRASE` with the catchphrase from Step 0 (e.g., "is the man!"):
+
+```bash
+cp $LMF4_DIR/templates/statusline-command.sh ~/.claude/statusline-command.sh
+chmod +x ~/.claude/statusline-command.sh
+# Now edit the file: replace AI_DISPLAY_NAME and AI_CATCHPHRASE with real values
+sed -i "s/AI_DISPLAY_NAME/THE_DISPLAY_NAME/g" ~/.claude/statusline-command.sh
+sed -i "s/AI_CATCHPHRASE/THE_CATCHPHRASE/g" ~/.claude/statusline-command.sh
+```
+
+Replace `THE_DISPLAY_NAME` with the actual uppercase AI name and `THE_CATCHPHRASE` with the actual catchphrase. For example, if the AI is named "Bob" with catchphrase "Bob is the man!", the statusline would show: `BOB is the man! | Claude 3.5 Sonnet | ctx: 12%`
+
+Then add the statusline configuration to settings.json. Merge this into the existing settings.json (same merge approach as Step 8):
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "bash /home/alex/.claude/statusline-command.sh"
+  }
+}
+```
+
+Replace `/home/alex` with the actual home directory path.
+
+**Verify:** Start a new Claude Code session and confirm the statusline shows the AI name and catchphrase.
+
 ### Step 9: Create helper scripts
 
 ```bash
@@ -912,6 +943,7 @@ Run all of these after installation. Every one must pass.
 | 11 | Backup repo exists | `ls ~/.claude/conversations-backup/.git/HEAD` | File exists |
 | 12 | GitHub remote set (if configured) | `cd ~/.claude/conversations-backup && git remote -v` | origin pointing to GitHub |
 | 13 | CLAUDE.md updated | `grep "AssociativeRecall\|memory_search\|LMF4" ~/.claude/CLAUDE.md` | Matches found |
+| 14 | Statusline configured | Read settings.json, check `statusLine` object exists with command pointing to `statusline-command.sh` | statusLine present |
 
 ---
 
