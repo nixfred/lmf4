@@ -106,6 +106,14 @@ insertDecision(
   "Error handling doesnt fix a null pointer. Adding complexity is the last resort."
 );
 
+insertDecision(
+  "Principle: Checklists over memory — use checklists for any task with more than 3 steps",
+  "Create a checklist before starting multi-step work. Show it to the human. Check items off as you go. " +
+  "Review at the end — every item must be verified done, not just run. " +
+  "A checked item means confirmed result, not just executed command. " +
+  "Checklists prevent the most common AI failure: declaring victory too early."
+);
+
 // ─── 3. Human Identity ────────────────────────────────────────
 insertEntry(
   "My human — USER_NAME",
@@ -173,7 +181,7 @@ db.close();
 '
 ```
 
-Expected output: `Genesis entries: 3 | Decisions: 7 | Learnings: 3` → Total: 13
+Expected output: `Genesis entries: 3 | Decisions: 8 | Learnings: 3` → Total: 14
 
 **Test searchability:**
 

@@ -177,7 +177,7 @@ The result is a `PERSONALITY.md` file you can edit anytime. Your AI reads it eve
 
 ## 📜 The Constitution
 
-Every LMF4 instance starts with 7 non-negotiable principles — forged through months of real work between an AI (Larry) and a human (Fred):
+Every LMF4 instance starts with 8 non-negotiable principles — forged through months of real work between an AI (Larry) and a human (Fred):
 
 | Principle | What It Means |
 |-----------|--------------|
@@ -188,6 +188,7 @@ Every LMF4 instance starts with 7 non-negotiable principles — forged through m
 | **Pride in craft** | Don't ship work you wouldn't put your name on |
 | **Protect the relationship** | Ask before destructive actions, no surprises |
 | **First principles** | Fix root causes, not symptoms |
+| **Checklists over memory** | Use checklists for multi-step work, verify every item |
 
 These are written into your AI's memory database at installation — searchable forever.
 
@@ -314,6 +315,42 @@ Let me know when you've done that and I'll begin.
 ---
 
 **Wait for the user to confirm.** If they say they've done it or tell you to proceed, continue. This ensures you have full reasoning depth for the complex steps ahead. **Do not rush. Do not skip steps. Do not take shortcuts.**
+
+### YOUR MASTER CHECKLIST
+
+This install has 18 steps. Before you start, create this checklist by outputting it to the user. You will check off each item as you complete it. At the end of the install, you will review this checklist with the user to confirm everything is done. **If any item is unchecked at the end, go back and complete it.**
+
+```
+LMF4 Installation Checklist
+============================
+[ ] Step 0:  Collected user preferences (name, AI name, GitHub, API keys)
+[ ] Step 1:  bun installed and on PATH (including .bashrc)
+[ ] Step 1b: Go + Fabric installed and configured with API keys
+[ ] Step 1c: PAI installed (or manual identity configured)
+[ ] Step 2:  Directory structure created (~/.claude/hooks, MEMORY, tools, bin)
+[ ] Step 3:  5 hooks + Inference.ts copied and executable
+[ ] Step 4:  MCP memory server installed
+[ ] Step 5:  Extraction prompt installed
+[ ] Step 6:  memory.db created with schema + FTS5 + triggers
+[ ] Step 7:  mem CLI built, linked, and responding to searches
+[ ] Step 8:  settings.json written (hooks, MCP, identity, principal, env)
+[ ] Step 9:  Helper scripts created (memory-catchup, memory-backup)
+[ ] Step 10: systemd timers active (2 timers running)
+[ ] Step 11: Backup repo initialized + connected to GitHub
+[ ] Step 12: CLAUDE.md written with memory + personality + principles
+[ ] Step 13: Memory flat files created
+[ ] Step 14: Welcome experience delivered to user
+[ ] Step 15: Personality workshop completed, PERSONALITY.md written
+[ ] Step 16: Genesis block written (13 foundational memories in DB)
+[ ] Step 17: First memory exercise completed
+[ ] Step 18: Handoff — final CLAUDE.md written, user given next steps
+```
+
+**Show this checklist to the user now.** Tell them: "Here's everything we're going to do together. I'll check off each step as we complete it and we'll review at the end to make sure nothing was missed."
+
+**After completing EVERY step**, re-output the checklist with the completed items marked `[x]`. This keeps both you and the user oriented on progress.
+
+**At the very end (after Step 18)**, output the FULL checklist one final time and verify every single item is `[x]`. If any item is `[ ]`, go back and complete it before declaring the install finished.
 
 ### What you need to know before starting
 
