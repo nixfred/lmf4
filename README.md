@@ -939,7 +939,13 @@ I've generated an SSH key for this machine. Now I need you to add it to your Git
 
 **Wait for the user to say they've done it.** Do not proceed until they confirm.
 
-After they confirm, verify it works:
+After they confirm, first add GitHub's host key to known_hosts (prevents "Host key verification failed"):
+
+```bash
+ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+```
+
+Then verify SSH works:
 
 ```bash
 ssh -T git@github.com 2>&1
@@ -954,38 +960,48 @@ If it fails, the most common problems are:
 
 Do NOT move on until `ssh -T git@github.com` succeeds.
 
-#### 11c: Guide user to create the repo
+#### 11c: Install gh CLI and create the repo yourself
 
-Output this message to the user:
-
----
-
-SSH is working. Now I need you to create a private repository for memory backups:
-
-1. Go to: https://github.com/new
-2. For "Repository name", enter: **the actual repo name from Step 0** (put the real value in the message, not the variable name)
-3. Set it to **Private** (important — this will contain your conversation data)
-4. Do NOT check any boxes (no README, no .gitignore, no license) — leave it completely empty
-5. Click **"Create repository"**
-6. Come back here and tell me "done"
-
----
-
-**Wait for the user to confirm.** Do not proceed until they say the repo is created.
-
-#### 11d: Connect to GitHub and push
-
-The backup repo was already initialized in the first part of Step 11. Now connect it to GitHub and push. **You must substitute the real values** — do not literally type `GH_USER` or `REPO_NAME` in the commands. Use the actual GitHub username and repo name the user gave you in Step 0.
+**Do this yourself — do NOT ask the user to create the repo.** You can create private GitHub repos using the `gh` CLI. Install it if not present:
 
 ```bash
+# Check if gh is installed
+which gh 2>/dev/null
+```
+
+If `gh` is not installed:
+```bash
+(type -p wget >/dev/null || sudo apt-get install wget -y) \
+  && sudo mkdir -p -m 755 /etc/apt/keyrings \
+  && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+  && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+  && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+  && sudo apt update \
+  && sudo apt install gh -y
+```
+
+Authenticate gh using the SSH key that's already on GitHub:
+```bash
+gh auth login --git-protocol ssh --hostname github.com --skip-ssh-key
+```
+If this requires interactive input, tell the user to run `! gh auth login` and select SSH when prompted. Wait for them to confirm.
+
+Now create the private repo and push. **Substitute the real values for `REPO_NAME`** from Step 0:
+```bash
 cd ~/.claude/conversations-backup
+gh repo create REPO_NAME --private --source=. --remote=origin --push
+```
+
+This creates the private repo on GitHub, sets it as the remote, and pushes in one command.
+
+**Verify:** Run `git remote -v` — it should show the GitHub URL. Run `gh repo view` — it should show the repo as private.
+
+If `gh repo create` fails, fall back to manual: ask the user to create the repo at github.com/new (private, empty, named `REPO_NAME`), then run:
+```bash
 git remote add origin git@github.com:GH_USER/REPO_NAME.git
 git push -u origin master
 ```
-
-**Verify:** Run `git remote -v` — it should show the GitHub URL. Run `git push --dry-run` — it should say "Everything up-to-date".
-
-If the push fails with "Permission denied (publickey)", go back to 11b and re-verify SSH access.
 
 ### Step 12: Add memory section to CLAUDE.md
 
