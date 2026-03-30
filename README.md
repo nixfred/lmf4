@@ -297,6 +297,10 @@ git clone https://github.com/nixfred/lmf4.git
 
 **You are a Claude Code instance.** The user has told you to clone a repo and install LMF4. You are now reading this file from inside that cloned repo.
 
+### FIRST: Set yourself to high effort mode
+
+Before doing anything else, you need to be running at maximum capability. This installation is complex, multi-step, and requires careful attention. If you have an effort or thinking setting, set it to the highest level now. If you are Claude Code, type `/config` and set `effort` to `high` — or if that's not available, just be aware: **this task requires your full attention, thorough reasoning, and careful execution. Do not rush. Do not skip steps. Do not take shortcuts.**
+
 ### What you need to know before starting
 
 Here are concepts you'll use throughout this install:
