@@ -487,7 +487,7 @@ Now install Fabric:
 go install github.com/danielmiessler/fabric@latest
 ```
 
-**Verify:** `fabric --version` returns a version number.
+**Verify:** `fabric --version` returns a version number. If the `go install` fails, check that Go 1.25+ is on PATH: `go version`. If it shows an older version, re-run `export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"` and try again. **Do not skip this step.**
 
 Now configure Fabric with the user's API keys. Create the config file at `~/.config/fabric/.env`:
 
@@ -527,20 +527,18 @@ fabric --updatepatterns
 
 ### Step 1c: Install PAI
 
-PAI (Personal AI Infrastructure) provides the identity system, algorithm framework, and hook infrastructure that LMF4 builds on. PAI has its own installer.
-
-The PAI installer is interactive — it asks questions. Since you already collected all the needed info in Step 0, you can provide the answers:
-
-**Option A — If the PAI installer repo is available:**
-
-Check if it exists at `~/.claude/PAI-Install/` or in the cloned repo. If found:
+PAI (Personal AI Infrastructure) provides the identity system, algorithm framework, and hook infrastructure that LMF4 builds on. It's an open-source project. Clone it and run the installer.
 
 ```bash
-cd ~/.claude/PAI-Install  # or wherever the installer lives
+mkdir -p ~/Projects
+cd ~/Projects
+git clone https://github.com/danielmiessler/Personal_AI_Infrastructure.git
+cd Personal_AI_Infrastructure
 bash install.sh
 ```
 
-The installer will ask you these questions — use the values from Step 0:
+The PAI installer is interactive — it will ask you questions. Since you already collected all the needed info in Step 0, provide the answers when prompted:
+
 - "What is your name?" → use `USER_NAME`
 - "What would you like to name your AI assistant?" → use `AI_NAME`
 - "Startup catchphrase?" → use `CATCHPHRASE`
@@ -549,17 +547,9 @@ The installer will ask you these questions — use the values from Step 0:
 - "ElevenLabs API key?" → use `ELEVENLABS_KEY` if they provided one, otherwise choose "Skip voice for now"
 - Voice gender → ask user if they care, default male
 
-The installer handles cloning the PAI repo, generating settings.json, and setting up the directory structure. After it completes, `~/.claude/PAI/` will exist with the full PAI system.
+The installer handles generating settings.json and setting up the directory structure. After it completes, `~/.claude/PAI/` will exist with the full PAI system.
 
-**Option B — If PAI installer is not available:**
-
-Tell the user:
-
-> "I need the PAI installer to continue. PAI provides the AI identity and hook system that LMF4 uses. Can you point me to where the PAI installer is, or would you like me to set up the minimal identity configuration manually?"
-
-If they want manual setup, you can create the `daidentity` section in settings.json yourself in Step 8 (which you'll do regardless as a merge step). LMF4 will work without full PAI — the only thing missing will be the voice server and the full PAI algorithm/skills system.
-
-**Verify:** `ls ~/.claude/PAI/` shows the PAI directory structure, OR at minimum `~/.claude/settings.json` exists.
+**Verify:** `ls ~/.claude/PAI/` shows the PAI directory structure AND `~/.claude/settings.json` exists.
 
 ### Step 2: Create directory structure
 
