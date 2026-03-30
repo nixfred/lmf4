@@ -195,7 +195,7 @@ LMF4 Installation Checklist
 [ ] Step 13: Memory flat files created
 [ ] Step 14: Welcome experience delivered to user
 [ ] Step 15: Personality workshop completed, PERSONALITY.md written
-[ ] Step 16: Genesis block written (13 foundational memories in DB)
+[ ] Step 16: Genesis block written (14 foundational memories in DB)
 [ ] Step 17: First memory exercise completed
 [ ] Step 18: Handoff — final CLAUDE.md written, user given next steps
 ```
@@ -314,10 +314,12 @@ echo 'export BUN_INSTALL="$HOME/.bun"' >> ~/.bashrc
 echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.bashrc
 ```
 
-Also add Claude Code convenience aliases to `.bashrc`:
+Add `~/bin` to PATH (needed for mem CLI and helper scripts) and Claude Code convenience aliases:
 ```bash
+grep -q 'HOME/bin' ~/.bashrc || echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
 echo "alias ccc='claude --dangerously-skip-permissions'" >> ~/.bashrc
 echo "alias cccc='claude --dangerously-skip-permissions -c'" >> ~/.bashrc
+export PATH="$HOME/bin:$PATH"
 ```
 
 Tell the user about these aliases:
@@ -394,6 +396,11 @@ After writing the config, download Fabric's patterns:
 
 ```bash
 fabric --updatepatterns
+```
+
+Secure the API keys file:
+```bash
+chmod 600 ~/.config/fabric/.env
 ```
 
 **Verify:** `fabric --listpatterns | head -5` shows pattern names.

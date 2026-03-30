@@ -618,8 +618,7 @@ function writeToDb(extracted: string, project: string, date: string, sessionId: 
     `INSERT INTO loa_entries (created_at, title, fabric_extract, session_id, project) VALUES (?, ?, ?, ?, ?)`
   ).run(date, title, extracted, sessionId, project);
 
-  db.prepare(`INSERT INTO loa_fts (rowid, title, fabric_extract) VALUES (?, ?, ?)`)
-    .run(loaResult.lastInsertRowid, title, extracted);
+  // NOTE: Do NOT insert into loa_fts manually — the trigger handles FTS sync automatically
 
   // 2. Extract and insert decisions
   const decisionsMatch = extracted.match(/(?:##\s*DECISIONS\s*MADE|DECISIONS:)\s*([\s\S]*?)(?=\n##\s|$)/);
@@ -638,8 +637,7 @@ function writeToDb(extracted: string, project: string, date: string, sessionId: 
         `INSERT INTO decisions (created_at, session_id, project, decision, reasoning) VALUES (?, ?, ?, ?, ?)`
       ).run(date, sessionId, project, decision, reasoning);
 
-      db.prepare(`INSERT INTO decisions_fts (rowid, decision, reasoning) VALUES (?, ?, ?)`)
-        .run(r.lastInsertRowid, decision, reasoning || '');
+      // NOTE: trigger handles FTS sync automatically
     }
   }
 
@@ -663,8 +661,8 @@ function writeToDb(extracted: string, project: string, date: string, sessionId: 
           db.prepare('UPDATE errors SET frequency = frequency + 1, last_seen = CURRENT_TIMESTAMP, fix = ? WHERE id = ?')
             .run(fix, existing.id);
         } else {
-          const r = db.prepare('INSERT INTO errors (created_at, error, fix) VALUES (?, ?, ?)').run(date, error, fix);
-          db.prepare('INSERT INTO errors_fts (rowid, error, fix) VALUES (?, ?, ?)').run(r.lastInsertRowid, error, fix);
+          db.prepare('INSERT INTO errors (created_at, error, fix) VALUES (?, ?, ?)').run(date, error, fix);
+          // NOTE: trigger handles FTS sync automatically
         }
       }
     }
