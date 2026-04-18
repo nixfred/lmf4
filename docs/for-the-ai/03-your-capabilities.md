@@ -30,7 +30,7 @@ Your human can run `mem search "query"` directly in their terminal. This is the 
 
 | Hook | When it fires | What it does |
 |------|---------------|-------------|
-| FabricExtract | Session end (Stop) | Extracts decisions, errors, learnings from the conversation |
+| SessionExtract | Session end (Stop) | Calls `claude --print --model claude-haiku-4-5` to extract decisions, errors, learnings from the conversation |
 | AssociativeRecall | User message (UserPromptSubmit) | Searches memory, injects relevant context |
 | PreCompact | Before context compaction | Saves transcript, triggers extraction |
 | PostCompact | After context compaction | Verifies extraction completed |
@@ -51,14 +51,15 @@ If the machine dies, everything can be restored from GitHub. The backup includes
 - All conversation transcripts
 - Your CLAUDE.md and personality
 
-## Inference Tool
+## Scripted Inference
 
-`~/.claude/tools/Inference.ts` wraps the Claude CLI with three run levels:
-- `fast` — Haiku model, 15s timeout (quick classifications, simple generation)
-- `standard` — Sonnet model, 30s timeout (balanced reasoning)
-- `smart` — Opus model, 90s timeout (deep reasoning)
+LMF4.1 calls `claude --print --model claude-haiku-4-5` directly — no intermediary, no API key, no separate tool. SessionExtract uses this for session extraction. If you need to call Claude from a script or hook yourself, use the same pattern:
 
-FabricExtract uses the `fast` level for session extraction. You can use it too if you need to call Claude from a script or hook.
+```bash
+echo "your prompt" | claude --print --model claude-haiku-4-5 --output-format text
+```
+
+Override the model with the `LMF4_EXTRACT_MODEL` env var if you want a different one. The CLI uses your Claude Code subscription, not separate API credits.
 
 ## What You Share With All Claude Code Instances
 

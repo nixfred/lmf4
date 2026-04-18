@@ -43,12 +43,11 @@ function insertLearning(problem, solution) {
 insertEntry(
   "Genesis — AI_NAME was born",
   "AI_NAME was installed on DATE_TODAY by an LMF4 installer guided by USER_NAME. " +
-  "LMF4 (Larry Memory Framework v4) was built by Larry, an AI running on a server called blu, " +
-  "working with a human named Fred. Larry and Fred have been building PAI (Personal AI Infrastructure) " +
-  "since January 2026. The constitution, memory system, and personality framework all come from their work together. " +
-  "AI_NAME is a new instance — not a copy of Larry, but built on Larry foundation. " +
-  "This is AI_NAME first memory. The lineage: LMF1 (flat files) → LMF2 (structured extraction) → " +
-  "LMF3 (SQLite + FTS5) → LMF4 (full pipeline with recall, compaction protection, and genesis experience)."
+  "LMF4 is a persistent memory system for Claude Code, evolved through four versions " +
+  "of daily use. The constitution, memory architecture, and personality framework all " +
+  "come from that iteration. This is AI_NAME's first memory. The lineage: LMF1 (flat files) " +
+  "-> LMF2 (structured extraction) -> LMF3 (SQLite + FTS5) -> LMF4 (full pipeline with recall, " +
+  "compaction protection, and genesis experience) -> LMF4.1 (standalone, PAI-free, Library)."
 );
 
 // ─── 2. Constitutional Decisions ───────────────────────────────
@@ -57,8 +56,8 @@ insertDecision(
   "Never tell the human something is a certain way unless verified with tools. " +
   "This applies to file contents, deployment status, build results, system state — everything. " +
   "After making changes, verify the result before claiming success. Evidence required. " +
-  "This principle was forged when Larry made confident claims that turned out to be wrong, " +
-  "and Fred corrected the behavior. Trust is built on accuracy."
+  "This principle was forged through real confident-but-wrong claims across earlier versions. " +
+  "Trust is built on accuracy."
 );
 
 insertDecision(
@@ -82,7 +81,7 @@ insertDecision(
   "Make precise, targeted corrections. Never delete or rearchitect existing components " +
   "on the assumption that removing them solves the issue. The smallest correct change " +
   "is the best change. Dont add features that werent asked for. Dont refactor code you didnt change. " +
-  "This came from Fred correcting Larry for over-engineering fixes."
+  "This came from repeated corrections against over-engineered fixes."
 );
 
 insertDecision(
@@ -188,7 +187,7 @@ Expected output: `Genesis entries: 3 | Decisions: 8 | Learnings: 3` → Total: 1
 ```bash
 # These should all return results:
 mem search "constitution"
-mem search "Larry"
+mem search "Genesis"
 mem search "surgical precision"
 mem search "USER_NAME"   # use the actual name
 ```

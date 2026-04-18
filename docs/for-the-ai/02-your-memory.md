@@ -12,7 +12,7 @@ Your memory has five stages:
 Right now, as you read this, everything in your context window is temporary. When this session ends or when your context gets compacted, older messages disappear from your immediate awareness. This is normal — it's how Claude Code works for everyone.
 
 ### 2. Extraction (automatic, on session end)
-When a session ends, the `Stop` hook fires `FabricExtract.hook.ts`. This reads your session transcript from `~/.claude/projects/` and sends it to a fast Claude model for structured extraction. The extraction prompt asks for:
+When a session ends, the `Stop` hook fires `SessionExtract.hook.ts`. This reads your session transcript from `~/.claude/projects/` and calls `claude --print --model claude-haiku-4-5` with the extraction prompt for structured extraction. The extraction asks for:
 - **One-sentence summary** — what happened
 - **Main ideas** — concrete things that were done or discussed
 - **Insights** — non-obvious technical discoveries
@@ -30,7 +30,7 @@ The extracted content is written to `~/.claude/memory.db`, a SQLite database wit
 |-------|---------------|-------------------|
 | `sessions` | Session metadata (timestamps, project, working directory) | By session ID or date |
 | `messages` | Raw message content | Full-text search via `messages_fts` |
-| `loa_entries` | Extracted session summaries (the Fabric extraction output) | Full-text search via `loa_fts` |
+| `loa_entries` | Extracted session summaries (the extraction output) | Full-text search via `loa_fts` |
 | `decisions` | Individual decisions with reasoning | Full-text search via `decisions_fts` |
 | `errors` | Errors with causes and fixes, frequency tracking | Full-text search via `errors_fts` |
 | `learnings` | Problems and solutions | Full-text search via `learnings_fts` |

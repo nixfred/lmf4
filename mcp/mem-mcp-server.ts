@@ -144,7 +144,7 @@ const TOOLS = [
   {
     name: "memory_search",
     description:
-      "Search Fred's conversation memory across all sessions, decisions, errors, and learnings. Uses full-text search on 1400+ extracted sessions. Use this to find past context, decisions, error fixes, or any topic discussed in previous conversations.",
+      "Search your persistent memory across all sessions, decisions, errors, and learnings. Uses full-text search (FTS5) over your extracted session transcripts. Use this to find past context, decisions, error fixes, or any topic discussed in previous conversations.",
     inputSchema: {
       type: "object" as const,
       properties: {
