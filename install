@@ -1,11 +1,13 @@
 #!/bin/bash
 #######################################################################
-# LMF4 — Larry Memory Framework v4
+# LMF4 — Persistent memory for Claude Code (v4.1 standalone)
 #
 # Installs the persistent memory system for Claude Code.
+# PAI and Fabric are NOT required. Works on any Linux with Claude Code.
 #
 # Prerequisites:
-#   - Ubuntu with Claude Code installed and working
+#   - Linux (Debian/Ubuntu tested; any distro should work) with Claude Code installed
+#   - bun is installed automatically if missing
 #
 # What LMF4 adds:
 #   - memory.db        SQLite + FTS5 database for persistent memory
@@ -165,7 +167,7 @@ fi
 #######################################################################
 log "Installing memory hooks..."
 HOOKS_INSTALLED=0
-for hook in FabricExtract.hook.ts AssociativeRecall.hook.ts PreCompact.hook.sh PostCompact.hook.ts StopFailure.hook.ts; do
+for hook in SessionExtract.hook.ts AssociativeRecall.hook.ts PreCompact.hook.sh PostCompact.hook.ts StopFailure.hook.ts; do
     src="$SCRIPT_DIR/hooks/$hook"
     dst="$HOOKS_DIR/$hook"
     if [ -f "$src" ]; then
@@ -249,7 +251,7 @@ const hookDefs = {
   'PreCompact': { type: 'command', command: HOME + '/.claude/hooks/PreCompact.hook.sh' },
   'PostCompact': { type: 'command', command: 'bun run ' + HOME + '/.claude/hooks/PostCompact.hook.ts' },
   'StopFailure': { type: 'command', command: 'bun run ' + HOME + '/.claude/hooks/StopFailure.hook.ts' },
-  'Stop': { type: 'command', command: 'bun run ' + HOME + '/.claude/hooks/FabricExtract.hook.ts' },
+  'Stop': { type: 'command', command: 'bun run ' + HOME + '/.claude/hooks/SessionExtract.hook.ts' },
   'UserPromptSubmit': { type: 'command', command: 'bun run ' + HOME + '/.claude/hooks/AssociativeRecall.hook.ts' },
 };
 
@@ -299,7 +301,15 @@ log "Creating helper scripts..."
 
 cat > "$BIN_DIR/memory-catchup" << 'EOF'
 #!/bin/bash
-exec bun run ~/.claude/hooks/FabricExtract.hook.ts --batch >> ~/.claude/MEMORY/EXTRACT_LOG.txt 2>&1
+# Thin wrapper — `mem catchup` runs the batch extraction in the mem CLI.
+# Kept for back-compat with older systemd units that reference memory-catchup.
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$HOME/bin:$BUN_INSTALL/bin:$HOME/.local/bin:$PATH"
+if command -v mem >/dev/null 2>&1; then
+    exec mem catchup >> ~/.claude/MEMORY/EXTRACT_LOG.txt 2>&1
+else
+    exec bun run ~/.claude/hooks/SessionExtract.hook.ts --batch >> ~/.claude/MEMORY/EXTRACT_LOG.txt 2>&1
+fi
 EOF
 chmod +x "$BIN_DIR/memory-catchup"
 
@@ -395,7 +405,7 @@ echo "════════════════════════�
 echo ""
 echo "  Components:"
 echo "    memory.db       $(du -sh "$CLAUDE_DIR/memory.db" 2>/dev/null | cut -f1 || echo 'new') SQLite + FTS5"
-echo "    5 hooks         FabricExtract, AssociativeRecall, PreCompact,"
+echo "    5 hooks         SessionExtract, AssociativeRecall, PreCompact,"
 echo "                    PostCompact, StopFailure"
 echo "    MCP server      memory_search + memory_recall"
 if command -v mem &>/dev/null; then
@@ -405,7 +415,7 @@ echo "    systemd         memory-catchup (4h) + memory-backup (4h)"
 echo "    backup repo     ~/.claude/conversations-backup/"
 echo ""
 echo "  How it works:"
-echo "    Session ends  → FabricExtract parses transcript → writes to memory.db"
+echo "    Session ends  → SessionExtract parses transcript → writes to memory.db"
 echo "    You type      → AssociativeRecall searches memory → injects context"
 echo "    Mid-session   → memory_search MCP tool for deeper queries"
 echo "    Compaction    → PreCompact saves, PostCompact verifies"

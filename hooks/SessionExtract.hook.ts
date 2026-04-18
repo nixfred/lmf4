@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 /**
- * FabricExtract.hook.ts - Extract Context for Future Sessions
+ * SessionExtract.hook.ts — Extract Context for Future Sessions
  *
  * PURPOSE:
  * Extracts structured context from session transcripts at session end.
- * Uses Anthropic API (claude-3-5-haiku) to analyze the conversation and
- * update 6 memory files for persistent recall across sessions.
+ * Uses `claude --print --model claude-haiku-4-5` to analyze the conversation
+ * and update memory files + memory.db for persistent recall across sessions.
  *
  * TRIGGER: Stop (wired in settings.json)
  *
@@ -13,7 +13,8 @@
  * - stdin: Hook input JSON with cwd
  *
  * OUTPUT:
- * - Appends extracted context to ~/.claude/MEMORY/DISTILLED.md
+ * - Writes extraction to memory.db (LoA entries + decisions + errors)
+ * - Appends to ~/.claude/MEMORY/DISTILLED.md (full archive)
  * - Updates HOT_RECALL.md (last N sessions)
  * - Updates SESSION_INDEX.json (searchable lookup)
  * - Appends to DECISIONS.log, REJECTIONS.log, ERROR_PATTERNS.json
@@ -21,13 +22,13 @@
  * FLOW:
  * 1. Find current session's conversation JSONL
  * 2. Extract message content (skip metadata/tool noise)
- * 3. Call Anthropic API (claude-3-5-haiku) for structured extraction
- * 4. Parse output and update all 6 memory files
+ * 3. Call `claude --print --model claude-haiku-4-5` with the extraction prompt
+ * 4. Parse output and update DB + memory files
  *
  * PERFORMANCE:
  * - Runs asynchronously via self-spawn, non-blocking
  *
- * Part of LMF4 (Larry Memory Framework v4)
+ * Part of LMF4.
  */
 
 import { existsSync, readFileSync, appendFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from 'fs';
@@ -48,14 +49,10 @@ const DEDUP_DB_PATH = join(MEMORY_DIR, '.extraction_tracker.json');
 const HOT_RECALL_MAX_SESSIONS = 10;
 const EXTRACT_PROMPT_PATH = join(MEMORY_DIR, 'extract_prompt.md');
 
-// Inference via Claude CLI (uses subscription, not API credits)
-// Check multiple locations: LMF4 tools dir, PAI Tools dir, or fallback to claude --print
-const HOME_DIR = process.env.HOME!;
-const INFERENCE_PATHS = [
-  join(HOME_DIR, '.claude', 'tools', 'Inference.ts'),          // LMF4 standalone
-  join(HOME_DIR, '.claude', 'PAI', 'Tools', 'Inference.ts'),   // PAI installation
-];
-const INFERENCE_PATH = INFERENCE_PATHS.find(p => existsSync(p)) || '';
+// Extraction runs via `claude --print --model claude-haiku-4-5`.
+// Uses the Claude Code subscription (not API credits).
+// Override via LMF4_EXTRACT_MODEL env var if you want a different model.
+const EXTRACT_MODEL = process.env.LMF4_EXTRACT_MODEL || 'claude-haiku-4-5';
 
 // ─── Interfaces ────────────────────────────────────────────────────
 
@@ -301,7 +298,7 @@ function appendDecisions(fabricOutput: string, sessionLabel: string, timestamp: 
 
   if (newEntries.length > 0) {
     appendFileSync(DECISIONS_PATH, newEntries.join('\n') + '\n', 'utf-8');
-    console.error(`[FabricExtract] Appended ${newEntries.length} decisions`);
+    console.error(`[SessionExtract] Appended ${newEntries.length} decisions`);
   }
 }
 
@@ -317,7 +314,7 @@ function appendRejections(fabricOutput: string, sessionLabel: string, timestamp:
 
   const entries = lines.map(l => `${timestamp}|${sessionLabel}|${l.replace(/\|/g, '/')}`);
   appendFileSync(REJECTIONS_PATH, entries.join('\n') + '\n', 'utf-8');
-  console.error(`[FabricExtract] Appended ${entries.length} rejections`);
+  console.error(`[SessionExtract] Appended ${entries.length} rejections`);
 }
 
 function appendErrors(fabricOutput: string, sessionLabel: string, timestamp: string): void {
@@ -355,7 +352,7 @@ function appendErrors(fabricOutput: string, sessionLabel: string, timestamp: str
   if (added > 0) {
     data.meta = { purpose: 'Pattern match errors for instant recall', updated: timestamp };
     writeFileSync(ERRORS_PATH, JSON.stringify(data, null, 2), 'utf-8');
-    console.error(`[FabricExtract] Appended ${added} error patterns`);
+    console.error(`[SessionExtract] Appended ${added} error patterns`);
   }
 }
 
@@ -394,68 +391,47 @@ Extract ONLY what actually happened. Follow this format EXACTLY:
 const EXTRACTION_PROMPT = getExtractionPrompt();
 
 /**
- * Extract using Inference.ts (Claude CLI with subscription billing)
- * Falls back to direct claude --print if Inference.ts is unavailable
+ * Extract using `claude --print --model claude-haiku-4-5`
+ * Uses the Claude Code subscription — no API keys required.
+ * The full transcript (truncated) is prepended to the extraction prompt
+ * and piped in via stdin so large prompts don't hit ARG_MAX.
  */
-async function extractWithInference(messages: string): Promise<string | null> {
+async function extractWithClaude(messages: string): Promise<string | null> {
   const maxChars = 60000; // Keep reasonable for haiku via CLI
   const truncated = messages.length > maxChars ? messages.slice(-maxChars) : messages;
 
   try {
-    // Write messages to temp file to avoid ARG_MAX
-    const tmpFile = join('/tmp', `fabric-extract-${Date.now()}.txt`);
-    writeFileSync(tmpFile, truncated, 'utf-8');
+    // Build combined input: extraction prompt + transcript
+    const stdinPayload =
+      EXTRACTION_PROMPT +
+      '\n\n---\n\nExtract the key information from this AI coding session transcript:\n\n' +
+      truncated;
 
-    const userPrompt = `Extract the key information from this AI coding session transcript:\n\n${truncated}`;
+    // Strip ANTHROPIC_API_KEY so the CLI uses the Claude Code subscription
+    const env = { ...process.env };
+    delete env.ANTHROPIC_API_KEY;
+    delete env.CLAUDECODE;
 
-    // Use Inference.ts if available, otherwise fall back to direct claude --print
-    let result: string;
-    if (existsSync(INFERENCE_PATH)) {
-      const { inference } = await import(INFERENCE_PATH);
-      const res = await inference({
-        systemPrompt: EXTRACTION_PROMPT,
-        userPrompt,
-        level: 'fast',
-        timeout: 60000,
-      });
-
-      // Clean up temp file
-      try { const { unlinkSync } = await import('fs'); unlinkSync(tmpFile); } catch {}
-
-      if (!res.success) {
-        console.error(`[FabricExtract] Inference failed: ${res.error}`);
-        return null;
+    const result = execSync(
+      `claude --print --model ${EXTRACT_MODEL} --output-format text`,
+      {
+        input: stdinPayload,
+        encoding: 'utf-8',
+        timeout: 90000,
+        maxBuffer: 10 * 1024 * 1024,
+        env,
       }
-      result = res.output;
-    } else {
-      // Direct claude --print fallback
-      const env = { ...process.env };
-      delete env.ANTHROPIC_API_KEY;
-      delete env.CLAUDECODE;
-
-      result = execSync(
-        `claude --print --bare --model haiku --output-format text --system-prompt "${EXTRACTION_PROMPT.replace(/"/g, '\\"').slice(0, 500)}"`,
-        {
-          input: userPrompt,
-          encoding: 'utf-8',
-          timeout: 60000,
-          maxBuffer: 10 * 1024 * 1024,
-          env,
-        }
-      ).trim();
-
-      try { const { unlinkSync } = await import('fs'); unlinkSync(tmpFile); } catch {}
-    }
+    ).trim();
 
     if (result && result.trim().length > 50) {
-      console.error(`[FabricExtract] Extraction successful (${result.length} chars)`);
+      console.error(`[SessionExtract] Extraction successful (${result.length} chars)`);
       logExtract(`SUCCESS: extraction=${result.length} chars`);
       return result.trim();
     }
-    console.error("[FabricExtract] Empty/short response");
+    console.error('[SessionExtract] Empty/short response');
     return null;
   } catch (error: any) {
-    console.error(`[FabricExtract] Extraction failed: ${error.message}`);
+    console.error(`[SessionExtract] Extraction failed: ${error.message}`);
     return null;
   }
 }
@@ -478,13 +454,13 @@ async function extractChunked(messages: string): Promise<string | null> {
   }
   if (currentChunk.trim()) chunks.push(currentChunk);
 
-  console.error(`[FabricExtract] CHUNKED: ${messages.length} chars -> ${chunks.length} chunks`);
+  console.error(`[SessionExtract] CHUNKED: ${messages.length} chars -> ${chunks.length} chunks`);
   logExtract(`CHUNKED: ${messages.length} chars -> ${chunks.length} chunks`);
 
   const partials: string[] = [];
   for (let i = 0; i < chunks.length; i++) {
-    console.error(`[FabricExtract] CHUNKED: chunk ${i + 1}/${chunks.length}`);
-    const result = await extractWithInference(chunks[i]);
+    console.error(`[SessionExtract] CHUNKED: chunk ${i + 1}/${chunks.length}`);
+    const result = await extractWithClaude(chunks[i]);
     if (result) partials.push(result);
     if (i < chunks.length - 1) await new Promise(resolve => setTimeout(resolve, 3000));
   }
@@ -494,7 +470,7 @@ async function extractChunked(messages: string): Promise<string | null> {
 
   // Meta-extract: merge partials
   try {
-    const mergeResult = await extractWithInference(
+    const mergeResult = await extractWithClaude(
       `Merge these ${partials.length} partial session extractions into one coherent summary. Deduplicate and combine:\n\n${partials.join('\n\n---\n\n')}`
     );
     if (mergeResult) return mergeResult;
@@ -510,13 +486,13 @@ async function extractAndAppend(conversationPath: string, cwd: string): Promise<
     ensureMemoryDirs();
 
     if (wasAlreadyExtracted(conversationPath)) {
-      console.error('[FabricExtract] Already extracted, skipping');
+      console.error('[SessionExtract] Already extracted, skipping');
       return;
     }
 
     const messages = extractMessages(conversationPath);
     if (messages.length < 500) {
-      console.error('[FabricExtract] Conversation too short, skipping');
+      console.error('[SessionExtract] Conversation too short, skipping');
       return;
     }
 
@@ -526,12 +502,12 @@ async function extractAndAppend(conversationPath: string, cwd: string): Promise<
       const chunkedResult = await extractChunked(messages);
       if (chunkedResult) extracted = chunkedResult;
     } else {
-      const result = await extractWithInference(messages);
+      const result = await extractWithClaude(messages);
       if (result) extracted = result;
     }
 
     if (!extracted) {
-      console.error("[FabricExtract] Extraction failed");
+      console.error("[SessionExtract] Extraction failed");
       logExtract("FAILURE: Extraction failed");
       markAsFailed(conversationPath);
       return;
@@ -539,7 +515,7 @@ async function extractAndAppend(conversationPath: string, cwd: string): Promise<
 
     // Quality gate
     if (!extracted.includes('ONE SENTENCE SUMMARY') && !extracted.includes('MAIN IDEAS')) {
-      console.error("[FabricExtract] QUALITY GATE FAILED");
+      console.error("[SessionExtract] QUALITY GATE FAILED");
       logExtract("QUALITY GATE FAILED");
       markAsFailed(conversationPath);
       return;
@@ -554,7 +530,7 @@ async function extractAndAppend(conversationPath: string, cwd: string): Promise<
     try {
       writeToDb(extracted, dirName, timestamp, sessionId, summaryMatch ? summaryMatch[1].trim() : `${dirName} session`);
     } catch (dbErr: any) {
-      console.error(`[FabricExtract] DB write failed: ${dbErr.message}`);
+      console.error(`[SessionExtract] DB write failed: ${dbErr.message}`);
     }
 
     // Write to flat files (secondary storage — loaded at session start)
@@ -584,19 +560,19 @@ async function extractAndAppend(conversationPath: string, cwd: string): Promise<
       appendRejections(extracted, dirName, timestamp);
       appendErrors(extracted, dirName, timestamp);
 
-      console.error(`[FabricExtract] Flat files updated`);
+      console.error(`[SessionExtract] Flat files updated`);
     } catch (flatErr: any) {
-      console.error(`[FabricExtract] Flat file write failed: ${flatErr.message}`);
+      console.error(`[SessionExtract] Flat file write failed: ${flatErr.message}`);
     }
 
     // Mark as extracted
     markAsExtracted(conversationPath);
 
     logExtract(`SUCCESS: All memory files updated for session=${dirName}`);
-    console.error(`[FabricExtract] All memory files + DB updated`);
+    console.error(`[SessionExtract] All memory files + DB updated`);
 
   } catch (error: any) {
-    console.error(`[FabricExtract] Extraction failed: ${error.message}`);
+    console.error(`[SessionExtract] Extraction failed: ${error.message}`);
     logExtract(`FAILURE: ${error.message}`);
   }
 }
@@ -669,7 +645,7 @@ function writeToDb(extracted: string, project: string, date: string, sessionId: 
   }
 
   db.close();
-  console.error(`[FabricExtract] DB: LoA entry + decisions + errors written`);
+  console.error(`[SessionExtract] DB: LoA entry + decisions + errors written`);
 }
 
 // ─── Logging ───────────────────────────────────────────────────────
@@ -686,7 +662,7 @@ function logExtract(message: string): void {
 if (process.argv.includes('--batch')) {
   const force = process.argv.includes('--force');
   logExtract(`BATCH: Starting${force ? ' (force)' : ''}`);
-  console.error(`[FabricExtract] BATCH mode${force ? ' (force re-extract all)' : ' (unprocessed only)'}`);
+  console.error(`[SessionExtract] BATCH mode${force ? ' (force re-extract all)' : ' (unprocessed only)'}`);
 
   // Find all conversation JSONL files across all projects
   const allConvs: Array<{ path: string; cwd: string }> = [];
@@ -706,7 +682,7 @@ if (process.argv.includes('--batch')) {
     }
   }
 
-  console.error(`[FabricExtract] BATCH: Found ${allConvs.length} conversation files`);
+  console.error(`[SessionExtract] BATCH: Found ${allConvs.length} conversation files`);
   logExtract(`BATCH: Found ${allConvs.length} conversation files`);
 
   (async () => {
@@ -726,7 +702,7 @@ if (process.argv.includes('--batch')) {
         continue;
       }
 
-      console.error(`[FabricExtract] BATCH: Processing ${conv.path.split('/').pop()} (${processed + 1})`);
+      console.error(`[SessionExtract] BATCH: Processing ${conv.path.split('/').pop()} (${processed + 1})`);
       try {
         await extractAndAppend(conv.path, conv.cwd);
         processed++;
@@ -740,7 +716,7 @@ if (process.argv.includes('--batch')) {
       }
     }
 
-    console.error(`[FabricExtract] BATCH: Done. Processed: ${processed}, Skipped: ${skipped}, Failed: ${failed}`);
+    console.error(`[SessionExtract] BATCH: Done. Processed: ${processed}, Skipped: ${skipped}, Failed: ${failed}`);
     logExtract(`BATCH: Done. Processed: ${processed}, Skipped: ${skipped}, Failed: ${failed}`);
     process.exit(0);
   })();
@@ -759,7 +735,7 @@ if (process.argv.includes('--batch')) {
     } catch {}
     extractAndAppend(convPath, cwd).then(() => process.exit(0)).catch(() => process.exit(1));
   } else {
-    console.error('Usage: bun FabricExtract.hook.ts --reextract <conversation.jsonl> [cwd]');
+    console.error('Usage: bun SessionExtract.hook.ts --reextract <conversation.jsonl> [cwd]');
     process.exit(1);
   }
 // --extract: Background extraction mode (spawned by main hook)

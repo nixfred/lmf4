@@ -181,8 +181,6 @@ LMF4 Installation Checklist
 ============================
 [ ] Step 0:  Collected user preferences (name, AI name, GitHub, API keys)
 [ ] Step 1:  bun installed and on PATH (including .bashrc)
-[ ] Step 1b: Go + Fabric installed and configured with API keys
-[ ] Step 1c: PAI installed from GitHub repo (PAI dir + settings.json + statusline)
 [ ] Step 2:  Directory structure created (~/.claude/hooks, MEMORY, tools, bin)
 [ ] Step 3:  5 hooks + Inference.ts copied and executable
 [ ] Step 4:  MCP memory server installed
