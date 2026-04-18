@@ -396,7 +396,18 @@ const EXTRACTION_PROMPT = getExtractionPrompt();
  * The full transcript (truncated) is prepended to the extraction prompt
  * and piped in via stdin so large prompts don't hit ARG_MAX.
  */
+const MIN_TRANSCRIPT_CHARS = 500;
+
 async function extractWithClaude(messages: string): Promise<string | null> {
+  // Skip trivial sessions — empty cloud-init runs, aborted sessions, etc.
+  // Haiku would produce minimal output and the quality gate would flag it as
+  // a failure, polluting EXTRACT_LOG with false negatives. Not worth the tokens.
+  if (messages.trim().length < MIN_TRANSCRIPT_CHARS) {
+    console.error(`[SessionExtract] SKIPPED: transcript too short (${messages.trim().length} < ${MIN_TRANSCRIPT_CHARS} chars)`);
+    logExtract(`SKIPPED: too short (${messages.trim().length} chars)`);
+    return null;
+  }
+
   const maxChars = 60000; // Keep reasonable for haiku via CLI
   const truncated = messages.length > maxChars ? messages.slice(-maxChars) : messages;
 
