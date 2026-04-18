@@ -207,32 +207,30 @@ if [ -f "$SCRIPT_DIR/prompts/extract_prompt.md" ]; then
 fi
 
 #######################################################################
-# 6. Build and install mem CLI
+# 6. Build and install mem CLI (always rebuild on upgrade)
 #######################################################################
-if command -v mem &>/dev/null; then
-    ok "mem CLI already installed"
-else
-    MEM_SRC="$SCRIPT_DIR/mem-cli"
-    if [ -d "$MEM_SRC/src" ]; then
-        log "Building mem CLI..."
-        MEM_DEST="$CLAUDE_DIR/memory-cli"
-        mkdir -p "$MEM_DEST/src" "$MEM_DEST/dist"
-        cp -r "$MEM_SRC/src/"* "$MEM_DEST/src/"
-        cp "$MEM_SRC/package.json" "$MEM_DEST/"
-        cd "$MEM_DEST"
-        bun install 2>/dev/null || true
-        bun build src/index.ts --outdir dist --target node 2>/dev/null
-        if [ -f dist/index.js ]; then
-            chmod +x dist/index.js
-            ln -sf "$MEM_DEST/dist/index.js" "$BIN_DIR/mem"
-            ok "mem CLI → ~/bin/mem"
-        else
-            err "mem CLI build failed"
-        fi
-        cd ~
+MEM_SRC="$SCRIPT_DIR/mem-cli"
+if [ -d "$MEM_SRC/src" ]; then
+    log "Building mem CLI (lmf4-mem-cli)..."
+    MEM_DEST="$CLAUDE_DIR/memory-cli"
+    # Clean old src so removed commands (e.g. LMF3 import-telos) don't linger
+    rm -rf "$MEM_DEST/src"
+    mkdir -p "$MEM_DEST/src" "$MEM_DEST/dist"
+    cp -r "$MEM_SRC/src/." "$MEM_DEST/src/"
+    cp "$MEM_SRC/package.json" "$MEM_DEST/"
+    cd "$MEM_DEST"
+    bun install 2>/dev/null || true
+    bun build src/index.ts --outdir dist --target node 2>/dev/null
+    if [ -f dist/index.js ]; then
+        chmod +x dist/index.js
+        ln -sf "$MEM_DEST/dist/index.js" "$BIN_DIR/mem"
+        ok "mem CLI → ~/bin/mem (v$(grep '"version"' "$MEM_SRC/package.json" | head -1 | cut -d'"' -f4))"
     else
-        err "mem CLI source not found in $MEM_SRC"
+        err "mem CLI build failed"
     fi
+    cd "$SCRIPT_DIR"
+else
+    err "mem CLI source not found in $MEM_SRC"
 fi
 
 #######################################################################

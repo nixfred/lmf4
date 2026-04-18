@@ -1,7 +1,7 @@
 {
   "name": "lmf4-mem-cli",
-  "version": "1.0.0",
-  "description": "Memory system for Claude Code — SQLite + FTS5",
+  "version": "4.1.0",
+  "description": "LMF4 memory CLI — SQLite + FTS5 + optional semantic search for Claude Code persistent memory",
   "type": "module",
   "bin": {
     "mem": "./dist/index.js"
@@ -9,5 +9,8 @@
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target node",
     "dev": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
   }
 }
