@@ -17,7 +17,7 @@ The "standalone" release. LMF4.1 no longer requires PAI, Fabric, Go, or any loca
 
 If you're on LMF4.0 with PAI + Fabric, you have three options:
 
-1. **Stay on 4.0.** Nothing forces the upgrade. The 4.0 hook will keep working as long as Fabric + the model `qwen2.5:3b` is reachable.
+1. **Stay on 4.0.** Nothing forces the upgrade. The 4.0 hook will keep working as long as Fabric and its configured model are reachable.
 2. **Upgrade to 4.1, keep PAI.** They coexist. Just re-run `./install` from a fresh clone of LMF4.1 — it additively wires the renamed `SessionExtract` hook, leaves your PAI bits alone, and the old `FabricExtract` reference in `settings.json` can be deleted by hand or ignored.
 3. **Full cutover.** Uninstall Fabric (`rm ~/go/bin/fabric ~/.config/fabric/.env`), uninstall Go if you don't need it elsewhere, remove PAI if you want to (`rm -rf ~/.claude/PAI ~/Projects/Personal_AI_Infrastructure`), and re-run LMF4.1's `./install`.
 
@@ -82,7 +82,7 @@ mem-cli/src/version.ts
 
 ### Security / privacy
 
-- Sanitization sweep: git-grep confirms zero personal identifiers (`Larry`, `Fred`, `nixfred` outside repo URL, `blu`, `BlueAlly`, `Monolith`), zero hardcoded internal IPs (`100.95.128.*`), zero internal hostnames (`nano` as a hostname reference), zero API keys.
+- Sanitization sweep before release: git-grep confirms zero personal identifiers, zero hardcoded internal IPs, zero internal hostnames, zero API keys or secrets in tracked files.
 - `templates/forever-commit.gitignore` excludes `.env*`, `.ssh/`, `.aws/`, `.gnupg/`, `*.key`, `*.pem`, `**/secret*`, `**/token*`, `**/*credential*` as a baseline. ForeverCommit hook refuses to run without these patterns present in the target repo's `.gitignore`.
 
 ---
