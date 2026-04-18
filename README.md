@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🧠 LMF4
+# 🧠 LMF4.1
 
 ### Persistent memory for Claude Code — your AI actually remembers.
 
