@@ -55,6 +55,18 @@ CREATE TABLE IF NOT EXISTS learnings (
   FOREIGN KEY (session_id) REFERENCES sessions(session_id)
 );
 
+-- Errors table: error/fix pairs with frequency counter for dedup
+-- Written by SessionExtract.hook.ts, read by AssociativeRecall + MCP
+CREATE TABLE IF NOT EXISTS errors (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  error TEXT NOT NULL,
+  cause TEXT,
+  fix TEXT,
+  frequency INTEGER DEFAULT 1,
+  last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Breadcrumbs table: context, notes, references
 CREATE TABLE IF NOT EXISTS breadcrumbs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -143,6 +155,10 @@ CREATE INDEX IF NOT EXISTS idx_learnings_project ON learnings(project);
 CREATE INDEX IF NOT EXISTS idx_learnings_category ON learnings(category);
 CREATE INDEX IF NOT EXISTS idx_learnings_created ON learnings(created_at);
 
+-- Error indexes
+CREATE INDEX IF NOT EXISTS idx_errors_error ON errors(error);
+CREATE INDEX IF NOT EXISTS idx_errors_last_seen ON errors(last_seen);
+
 -- Breadcrumb indexes
 CREATE INDEX IF NOT EXISTS idx_breadcrumbs_project ON breadcrumbs(project);
 CREATE INDEX IF NOT EXISTS idx_breadcrumbs_importance ON breadcrumbs(importance);
@@ -188,6 +204,15 @@ CREATE VIRTUAL TABLE IF NOT EXISTS learnings_fts USING fts5(
   tags,
   project,
   content='learnings',
+  content_rowid='id'
+);
+
+-- FTS5 virtual table for errors
+CREATE VIRTUAL TABLE IF NOT EXISTS errors_fts USING fts5(
+  error,
+  fix,
+  cause,
+  content='errors',
   content_rowid='id'
 );
 
@@ -269,6 +294,18 @@ END;
 CREATE TRIGGER IF NOT EXISTS learnings_au AFTER UPDATE ON learnings BEGIN
   INSERT INTO learnings_fts(learnings_fts, rowid, problem, solution, tags, project) VALUES('delete', old.id, old.problem, old.solution, old.tags, old.project);
   INSERT INTO learnings_fts(rowid, problem, solution, tags, project) VALUES (new.id, new.problem, new.solution, new.tags, new.project);
+END;
+
+-- Errors FTS triggers
+CREATE TRIGGER IF NOT EXISTS errors_ai AFTER INSERT ON errors BEGIN
+  INSERT INTO errors_fts(rowid, error, fix, cause) VALUES (new.id, new.error, new.fix, new.cause);
+END;
+CREATE TRIGGER IF NOT EXISTS errors_ad AFTER DELETE ON errors BEGIN
+  INSERT INTO errors_fts(errors_fts, rowid, error, fix, cause) VALUES('delete', old.id, old.error, old.fix, old.cause);
+END;
+CREATE TRIGGER IF NOT EXISTS errors_au AFTER UPDATE ON errors BEGIN
+  INSERT INTO errors_fts(errors_fts, rowid, error, fix, cause) VALUES('delete', old.id, old.error, old.fix, old.cause);
+  INSERT INTO errors_fts(rowid, error, fix, cause) VALUES (new.id, new.error, new.fix, new.cause);
 END;
 
 -- Breadcrumbs FTS triggers
