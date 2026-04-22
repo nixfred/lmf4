@@ -20,6 +20,12 @@ const DB_PATH = join(process.env.HOME!, ".claude", "memory.db");
 const MIN_QUERY_LENGTH = 12; // Skip very short messages like "yes", "ok", "do it"
 const MAX_RESULTS = 5;
 const MAX_OUTPUT_CHARS = 1800;
+// Noise floor: suppress recall results scoring below this. Tuned from live
+// diagnostic data — clearly-garbage matches cluster at 0.15–1.8; useful
+// matches at 2.5+. Showing weak matches adds cognitive tax and can mislead,
+// so silence is better than noise. Raise for stricter recall, lower for
+// broader; 2.0 is the conservative default.
+const MIN_SCORE = 2.0;
 
 // Words that are too common to search for
 const STOP_WORDS = new Set([
@@ -203,9 +209,9 @@ function searchMemory(terms: string[]): RecallResult[] {
 
   db.close();
 
-  // Sort by score descending, take top N
+  // Sort by score descending, apply noise floor, take top N
   results.sort((a, b) => b.score - a.score);
-  return results.slice(0, MAX_RESULTS);
+  return results.filter((r) => r.score >= MIN_SCORE).slice(0, MAX_RESULTS);
 }
 
 function formatResults(results: RecallResult[]): string {
@@ -241,7 +247,10 @@ async function main() {
 
   // Skip if it looks like a rating or simple acknowledgment
   if (/^\d{1,2}$/.test(content.trim())) return;
-  if (/^(yes|no|ok|sure|thanks|do it|go|continue|proceed)\b/i.test(content.trim())) return;
+  // Widened to cover more short-form acks and short-signal directives —
+  // recall on "do your X" / "run it" / "try that" is essentially searching
+  // on ~no signal and reliably returns noise. Silence beats noise here.
+  if (/^(yes|yep|yeah|no|nope|ok|okay|sure|thanks|thx|do it|do your|go|run it|try (it|that)|fix it|make it|apply|continue|proceed|right|correct|agreed?|ship it|lgtm|good|great|perfect)\b/i.test(content.trim())) return;
 
   const terms = extractKeyTerms(content);
   if (terms.length === 0) return;
