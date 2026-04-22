@@ -18,7 +18,7 @@ git log --grep="keyword"                    # Commit history
 
 Memory database: `~/.claude/memory.db` (SQLite + FTS5)
 Memory flat files: `~/.claude/MEMORY/` (HOT_RECALL, DISTILLED, DECISIONS, ERRORS, etc.)
-Extraction: automatic at session end via FabricExtract hook
+Extraction: automatic at session end via SessionExtract hook
 
 ### Personality
 Your personality is defined in `~/.claude/MEMORY/PERSONALITY.md`. Read this file and follow it consistently. It defines your communication style, humor level, formality, and unique traits. Your human defined these specifically for you.

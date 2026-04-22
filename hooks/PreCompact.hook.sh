@@ -3,7 +3,7 @@
 # PreCompact.hook.sh — Fires before Claude compacts conversation context
 #
 # Two actions:
-# 1. Trigger FabricExtract on current session (preserves context about to be lost)
+# 1. Trigger SessionExtract on current session (preserves context about to be lost)
 # 2. Git checkpoint all JSONL files (raw transcript backup)
 #
 # This is the "last chance" to capture full context before compaction
@@ -26,11 +26,11 @@ if [ -z "$CWD" ]; then
     CWD="$(pwd)"
 fi
 
-# 1. Trigger extraction via FabricExtract (background, non-blocking)
-HOOK_PATH="$HOME/.claude/hooks/FabricExtract.hook.ts"
+# 1. Trigger extraction via SessionExtract (background, non-blocking)
+HOOK_PATH="$HOME/.claude/hooks/SessionExtract.hook.ts"
 if [ -f "$HOOK_PATH" ]; then
     echo "$INPUT" | bun run "$HOOK_PATH" &
-    log "Triggered FabricExtract"
+    log "Triggered SessionExtract"
 fi
 
 # 2. Git checkpoint the conversation backup repo (if it exists)
